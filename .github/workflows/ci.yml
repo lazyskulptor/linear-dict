@@ -1,0 +1,41 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+jobs:
+  deploy_prod:
+    if: "!contains(github.ref, '-')"
+    runs-on: ubuntu-latest
+    env:
+      ADAPTER: sst
+      SST_TELEMETRY_DISABLED: '1'
+      SST_NO_BUN: '1'
+      PUBLIC_API_HOST: ${{ secrets.PROD_API_HOST }}
+      PUBLIC_CDN_HOST: ${{ secrets.PROD_CDN_HOST }}
+      PUBLIC_PARENT_DOMAIN: ${{ secrets.PROD_PARENT_DOMAIN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to production
+        run: npx sst deploy --stage production --print-logs
+
+      - name: Print SST log on failure
+        if: failure()
+        run: |
+          if [ -f .sst/log/sst.log ]; then
+            echo '===== SST LOG (deploy_prod) ====='
+            cat .sst/log/sst.log
+          fi
