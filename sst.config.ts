@@ -10,6 +10,9 @@ export default $config({
   },
   async run() {
     new sst.aws.SvelteKit('LinearDict', {
+      server: {
+        timeout: '3 minutes'
+      },
       environment: {
         PRIVATE_TOGETHER_API_KEY: process.env.PRIVATE_TOGETHER_API_KEY ?? ''
       }
