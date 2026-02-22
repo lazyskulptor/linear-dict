@@ -13,9 +13,7 @@ jobs:
       ADAPTER: sst
       SST_TELEMETRY_DISABLED: '1'
       SST_NO_BUN: '1'
-      PUBLIC_API_HOST: ${{ secrets.PROD_API_HOST }}
-      PUBLIC_CDN_HOST: ${{ secrets.PROD_CDN_HOST }}
-      PUBLIC_PARENT_DOMAIN: ${{ secrets.PROD_PARENT_DOMAIN }}
+      PRIVATE_TOGETHER_API_KEY: ${{ secrets.PRIVATE_TOGETHER_API_KEY }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
@@ -25,6 +23,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Remove pre-installed Pulumi
+        run: rm -f /usr/local/bin/pulumi*
 
       - name: Install dependencies
         run: npm ci
