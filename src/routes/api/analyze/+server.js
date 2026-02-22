@@ -1,0 +1,228 @@
+import { json } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
+
+const API_URL = 'https://api.deepinfra.com/v1/openai/chat/completions';
+const MODEL = 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo';
+
+const MAX_WORDS_PER_CHUNK = 40;
+
+const POS_EXAMPLES = {
+	'한국어': '명사,동사,형용사,부사,전치사,관사,대명사,접속사,감탄사,조사',
+	'English': 'noun,verb,adj,adv,prep,det,pron,conj,intj,part',
+	'中文': '名词,动词,形容词,副词,介词,冠词,代词,连词,叹词,助词',
+	'日本語': '名詞,動詞,形容詞,副詞,前置詞,冠詞,代名詞,接続詞,感嘆詞,助詞',
+	'Русский': 'сущ,гл,прил,нар,предл,арт,мест,союз,межд,част',
+	'Español': 'sust,verbo,adj,adv,prep,art,pron,conj,interj,part',
+	'Français': 'nom,verbe,adj,adv,prép,art,pron,conj,interj,part',
+	'Deutsch': 'Subst,Verb,Adj,Adv,Präp,Art,Pron,Konj,Interj,Part'
+};
+
+/**
+ * Split text into chunks by sentence boundaries, each within word limit.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function splitIntoChunks(text) {
+	const sentences = text.match(/[^.!?。！？]+[.!?。！？]*\s*/g) || [text];
+	const chunks = [];
+	let current = '';
+
+	for (const sentence of sentences) {
+		const combined = current + sentence;
+		if (combined.split(/\s+/).filter(Boolean).length > MAX_WORDS_PER_CHUNK && current) {
+			chunks.push(current.trim());
+			current = sentence;
+		} else {
+			current = combined;
+		}
+	}
+	if (current.trim()) {
+		chunks.push(current.trim());
+	}
+	return chunks;
+}
+
+/**
+ * Decode JSON-escaped unicode sequences in a regex-extracted string.
+ * @param {string} str
+ * @returns {string}
+ */
+function decodeJsonString(str) {
+	return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+		String.fromCharCode(parseInt(hex, 16))
+	).replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+}
+
+/**
+ * Try to fix and parse potentially malformed JSON array string.
+ * @param {string} str
+ * @returns {Array<{ word: string, reading: string, meaning: string, dict: string, pos: string }>}
+ */
+function repairAndParseJSON(str) {
+	// First try direct parse
+	try {
+		return JSON.parse(str);
+	} catch {
+		// continue to repair
+	}
+
+	// Remove trailing commas before } or ]
+	let fixed = str.replace(/,\s*([}\]])/g, '$1');
+
+	// Fix missing commas between objects: }{ or }\n{
+	fixed = fixed.replace(/\}\s*\{/g, '},{');
+
+	// If truncated mid-object, cut to last complete object
+	if (!fixed.trimEnd().endsWith(']')) {
+		const lastBrace = fixed.lastIndexOf('}');
+		if (lastBrace !== -1) {
+			fixed = fixed.substring(0, lastBrace + 1) + ']';
+		}
+	}
+
+	// Remove trailing comma before ]
+	fixed = fixed.replace(/,\s*\]$/, ']');
+
+	try {
+		return JSON.parse(fixed);
+	} catch {
+		// continue
+	}
+
+	// Extract individual objects with regex as last resort
+	const objects = [];
+	const V = `"((?:[^"\\\\]|\\\\.)*)"`;
+	const objRegex = new RegExp(
+		`\\{\\s*"word"\\s*:\\s*${V}\\s*,\\s*"reading"\\s*:\\s*${V}\\s*,\\s*"meaning"\\s*:\\s*${V}\\s*,\\s*"dict"\\s*:\\s*${V}\\s*,\\s*"pos"\\s*:\\s*${V}\\s*\\}`,
+		'g'
+	);
+	let match;
+	while ((match = objRegex.exec(str)) !== null) {
+		objects.push({
+			word: decodeJsonString(match[1]),
+			reading: decodeJsonString(match[2]),
+			meaning: decodeJsonString(match[3]),
+			dict: decodeJsonString(match[4]),
+			pos: decodeJsonString(match[5])
+		});
+	}
+
+	if (objects.length > 0) {
+		return objects;
+	}
+
+	throw new Error('Failed to parse JSON response');
+}
+
+/**
+ * Call DeepInfra API for a single chunk of text, with retry.
+ * @param {string} text
+ * @param {string} sourceLang
+ * @param {string} targetLang
+ * @param {number} attempt
+ * @returns {Promise<Array<{ word: string, reading: string, meaning: string, pos: string }>>}
+ */
+async function analyzeChunk(text, sourceLang, targetLang, attempt = 0) {
+	const posExamples = POS_EXAMPLES[targetLang] || POS_EXAMPLES['English'];
+
+	const response = await fetch(API_URL, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${env.DEEPINFRA_API_KEY}`
+		},
+		body: JSON.stringify({
+			model: MODEL,
+			messages: [
+				{
+					role: 'system',
+					content: `You are a JSON-only word-by-word translator. Output ONLY a raw JSON array. No markdown. No explanation. No code fences. Start your response with [ and end with ].`
+				},
+				{
+					role: 'user',
+					content: `Translate EVERY single word from ${sourceLang} to ${targetLang}. Do NOT skip any word, including articles (a, an, the), prepositions (in, on, at, of, to, for, with), conjunctions (and, but, or), pronouns (he, she, it, they), punctuation marks, and all other words. Every token in the text must appear in your output.
+
+Output: JSON array. Each element: {"word":"...","reading":"...","meaning":"...","dict":"...","pos":"..."}
+- word: the exact original word/token as it appears
+- reading: pronunciation (pinyin for Chinese, romaji for Japanese, transliteration for non-Latin scripts, "" for Latin scripts)
+- meaning: contextual ${targetLang} translation of this word as used in this sentence (a short phrase or word that fits the context)
+- dict: brief dictionary definition of this word in ${targetLang} (the general/primary meaning, not context-specific). For function words like articles, prepositions, pronouns, write their grammatical role.
+- pos: one of [${posExamples}]
+
+Example for English→한국어:
+Input: "The cat sat on a mat."
+Output: [{"word":"The","reading":"","meaning":"그","dict":"정관사, 특정한 것을 가리킴","pos":"관사"},{"word":"cat","reading":"","meaning":"고양이","dict":"고양이, 작은 포유류","pos":"명사"},{"word":"sat","reading":"","meaning":"앉았다","dict":"앉다 (sit의 과거형)","pos":"동사"},{"word":"on","reading":"","meaning":"위에","dict":"~위에, 접촉하여","pos":"전치사"},{"word":"a","reading":"","meaning":"하나의","dict":"부정관사, 하나의","pos":"관사"},{"word":"mat","reading":"","meaning":"매트","dict":"매트, 깔개","pos":"명사"},{"word":".","reading":"","meaning":"","dict":"","pos":"부호"}]
+
+Now analyze this text. Include ALL words:
+${text}`
+				}
+			],
+			temperature: 0.05,
+			max_tokens: 8192
+		})
+	});
+
+	if (!response.ok) {
+		const errorBody = await response.text();
+		console.error('DeepInfra API error:', response.status, errorBody);
+		throw new Error(`API error (${response.status})`);
+	}
+
+	const data = await response.json();
+	let content = data.choices?.[0]?.message?.content?.trim();
+
+	if (!content) {
+		throw new Error('Empty response from API.');
+	}
+
+	// Strip markdown code fences if present
+	content = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/g, '');
+
+	// Find the JSON array in the response
+	const startIdx = content.indexOf('[');
+	if (startIdx === -1) {
+		console.error('No JSON array found in response:', content);
+		throw new Error('Could not parse response.');
+	}
+
+	const jsonStr = content.substring(startIdx);
+
+	try {
+		return repairAndParseJSON(jsonStr);
+	} catch (parseErr) {
+		// Retry once on parse failure
+		if (attempt < 1) {
+			console.warn('JSON parse failed, retrying chunk...', parseErr.message);
+			return analyzeChunk(text, sourceLang, targetLang, attempt + 1);
+		}
+		console.error('Failed to parse JSON after retry:', jsonStr.substring(0, 500));
+		throw new Error('Could not parse response.');
+	}
+}
+
+/** @type {import('./$types').RequestHandler} */
+export async function POST({ request }) {
+	const { text, sourceLang, targetLang } = await request.json();
+
+	if (!text?.trim()) {
+		return json({ error: 'Please enter text to analyze.' }, { status: 400 });
+	}
+
+	if (!env.DEEPINFRA_API_KEY) {
+		return json({ error: 'API key is not configured.' }, { status: 500 });
+	}
+
+	try {
+		const chunks = splitIntoChunks(text.trim());
+		const results = await Promise.all(
+			chunks.map((chunk) => analyzeChunk(chunk, sourceLang, targetLang))
+		);
+		const words = results.flat();
+
+		return json({ words });
+	} catch (err) {
+		console.error('Analyze error:', err);
+		const message = err instanceof Error ? err.message : 'An error occurred during analysis.';
+		return json({ error: message }, { status: 500 });
+	}
+}

@@ -1,0 +1,28 @@
+@import 'tailwindcss';
+
+@layer base {
+  html {
+    font-family: 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  body {
+    background-color: rgb(var(--color-primary-bg) / 1);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@theme {
+  --color-primary-bg: #fff;
+  --color-primary-50: oklch(0.985 0.002 247.839);
+  --color-primary-100: oklch(0.967 0.003 264.542);
+  --color-primary-200: oklch(0.928 0.006 264.531);
+  --color-primary-300: oklch(0.872 0.01 258.338);
+  --color-primary-400: oklch(0.707 0.022 261.325);
+  --color-primary-500: oklch(0.551 0.027 264.364);
+  --color-primary-600: oklch(0.446 0.03 256.802);
+  --color-primary-700: oklch(0.373 0.034 259.733);
+  --color-primary-800: oklch(0.278 0.033 256.848);
+  --color-primary-900: oklch(0.21 0.034 264.665);
+  --color-primary-950: oklch(0.13 0.028 261.692);
+}
