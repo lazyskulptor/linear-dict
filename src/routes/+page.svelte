@@ -196,14 +196,14 @@
 
 			<!-- Bottom ad -->
 			<div class="mt-6">
-				<AdUnit slot="BOTTOM_AD_SLOT_ID" format="horizontal" />
+				<AdUnit slot="5718472634" format="horizontal" />
 			</div>
 		</div>
 
 		<!-- Right sidebar ad (hidden on mobile) -->
 		<aside class="hidden w-[160px] shrink-0 lg:block">
 			<div class="sticky top-8">
-				<AdUnit slot="SIDEBAR_AD_SLOT_ID" format="vertical" />
+				<AdUnit slot="8082939182" format="vertical" />
 			</div>
 		</aside>
 	</div>
