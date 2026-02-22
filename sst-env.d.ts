@@ -5,10 +5,10 @@
 
 declare module "sst" {
   export interface Resource {
-    "Pharmantech": {
-      "type": "sst.aws.SvelteKit"
-      "url": string
-    }
+    LinearDict: {
+      type: 'sst.aws.SvelteKit';
+      url: string;
+    };
   }
 }
 /// <reference path="sst-env.d.ts" />

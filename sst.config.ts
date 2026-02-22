@@ -3,14 +3,14 @@
 export default $config({
   app(input) {
     return {
-      name: 'Pharmantech',
+      name: 'LinearDict',
       removal: input?.stage === 'production' ? 'retain' : 'remove',
       // protect: ['production'].includes(input?.stage),
       home: 'aws'
     };
   },
   async run() {
-    new sst.aws.SvelteKit('Pharmantech', {
+    new sst.aws.SvelteKit('LinearDict', {
       environment: {
         PUBLIC_API_HOST: process.env.PUBLIC_API_HOST ?? 'http://localhost:8080',
         PUBLIC_CDN_HOST: process.env.PUBLIC_CDN_HOST ?? 'http://localhost:8080/media',
