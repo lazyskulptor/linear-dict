@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 
-const API_URL = 'https://api.deepinfra.com/v1/openai/chat/completions';
-const MODEL = 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo';
+const API_URL = 'https://api.together.xyz/v1/chat/completions';
+const MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507-tput';
 
 const MAX_WORDS_PER_CHUNK = 40;
 
@@ -56,7 +56,7 @@ function decodeJsonString(str) {
 /**
  * Try to fix and parse potentially malformed JSON array string.
  * @param {string} str
- * @returns {Array<{ word: string, reading: string, meaning: string, dict: string, pos: string }>}
+ * @returns {Array<{ word: string, meaning: string, dict: string, pos: string }>}
  */
 function repairAndParseJSON(str) {
 	// First try direct parse
@@ -93,17 +93,16 @@ function repairAndParseJSON(str) {
 	const objects = [];
 	const V = `"((?:[^"\\\\]|\\\\.)*)"`;
 	const objRegex = new RegExp(
-		`\\{\\s*"word"\\s*:\\s*${V}\\s*,\\s*"reading"\\s*:\\s*${V}\\s*,\\s*"meaning"\\s*:\\s*${V}\\s*,\\s*"dict"\\s*:\\s*${V}\\s*,\\s*"pos"\\s*:\\s*${V}\\s*\\}`,
+		`\\{\\s*"word"\\s*:\\s*${V}\\s*,\\s*"meaning"\\s*:\\s*${V}\\s*,\\s*"dict"\\s*:\\s*${V}\\s*,\\s*"pos"\\s*:\\s*${V}\\s*\\}`,
 		'g'
 	);
 	let match;
 	while ((match = objRegex.exec(str)) !== null) {
 		objects.push({
 			word: decodeJsonString(match[1]),
-			reading: decodeJsonString(match[2]),
-			meaning: decodeJsonString(match[3]),
-			dict: decodeJsonString(match[4]),
-			pos: decodeJsonString(match[5])
+			meaning: decodeJsonString(match[2]),
+			dict: decodeJsonString(match[3]),
+			pos: decodeJsonString(match[4])
 		});
 	}
 
@@ -126,41 +125,44 @@ async function analyzeChunk(text, sourceLang, targetLang, attempt = 0) {
 	const posExamples = POS_EXAMPLES[targetLang] || POS_EXAMPLES['English'];
 
 	const response = await fetch(API_URL, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${env.DEEPINFRA_API_KEY}`
-		},
-		body: JSON.stringify({
-			model: MODEL,
-			messages: [
-				{
-					role: 'system',
-					content: `You are a JSON-only word-by-word translator. Output ONLY a raw JSON array. No markdown. No explanation. No code fences. Start your response with [ and end with ].`
-				},
-				{
-					role: 'user',
-					content: `Translate EVERY single word from ${sourceLang} to ${targetLang}. Do NOT skip any word, including articles (a, an, the), prepositions (in, on, at, of, to, for, with), conjunctions (and, but, or), pronouns (he, she, it, they), punctuation marks, and all other words. Every token in the text must appear in your output.
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.PRIVATE_TOGETHER_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You are a JSON-only word-by-word translator. Output ONLY a raw JSON array. No markdown. No explanation. No code fences. Start your response with [ and end with ].`
+        },
+        {
+          role: 'user',
+          content: `Translate EVERY single word from ${sourceLang} to ${targetLang}. Do NOT skip any word, including articles (a, an, the), prepositions (in, on, at, of, to, for, with), conjunctions (and, but, or), pronouns (he, she, it, they), and all other words. Every token in the text must appear in your output.
 
-Output: JSON array. Each element: {"word":"...","reading":"...","meaning":"...","dict":"...","pos":"..."}
-- word: the exact original word/token as it appears
-- reading: pronunciation (pinyin for Chinese, romaji for Japanese, transliteration for non-Latin scripts, "" for Latin scripts)
-- meaning: contextual ${targetLang} translation of this word as used in this sentence (a short phrase or word that fits the context)
-- dict: brief dictionary definition of this word in ${targetLang} (the general/primary meaning, not context-specific). For function words like articles, prepositions, pronouns, write their grammatical role.
+CRITICAL: The "meaning" and "dict" fields MUST be written ENTIRELY in ${targetLang}. Do NOT use any other language or script. For example, if target is 한국어, write ONLY in Korean (한글), never use Chinese characters (漢字) or other scripts.
+
+For punctuation marks and standalone numbers: include them but set meaning and dict to empty strings "".
+
+Output: JSON array. Each element: {"word":"...","meaning":"...","dict":"...","pos":"..."}
+- word: the exact original token as it appears
+- meaning: contextual ${targetLang} translation (MUST be in ${targetLang} only). "" for numbers/punctuation.
+- dict: brief dictionary definition (MUST be in ${targetLang} only). "" for numbers/punctuation.
 - pos: one of [${posExamples}]
 
 Example for English→한국어:
-Input: "The cat sat on a mat."
-Output: [{"word":"The","reading":"","meaning":"그","dict":"정관사, 특정한 것을 가리킴","pos":"관사"},{"word":"cat","reading":"","meaning":"고양이","dict":"고양이, 작은 포유류","pos":"명사"},{"word":"sat","reading":"","meaning":"앉았다","dict":"앉다 (sit의 과거형)","pos":"동사"},{"word":"on","reading":"","meaning":"위에","dict":"~위에, 접촉하여","pos":"전치사"},{"word":"a","reading":"","meaning":"하나의","dict":"부정관사, 하나의","pos":"관사"},{"word":"mat","reading":"","meaning":"매트","dict":"매트, 깔개","pos":"명사"},{"word":".","reading":"","meaning":"","dict":"","pos":"부호"}]
+Input: "The 3 cats."
+Output: [{"word":"The","meaning":"그","dict":"정관사, 특정한 것을 가리킴","pos":"관사"},{"word":"3","meaning":"","dict":"","pos":""},{"word":"cats","meaning":"고양이들","dict":"고양이, 작은 포유류","pos":"명사"},{"word":".","meaning":"","dict":"","pos":""}]
 
-Now analyze this text. Include ALL words:
+Now analyze this text. Include ALL tokens:
 ${text}`
-				}
-			],
-			temperature: 0.05,
-			max_tokens: 8192
-		})
-	});
+        }
+      ],
+      temperature: 0.05,
+      max_tokens: 8192
+    })
+  });
 
 	if (!response.ok) {
 		const errorBody = await response.text();
@@ -208,16 +210,16 @@ export async function POST({ request }) {
 		return json({ error: 'Please enter text to analyze.' }, { status: 400 });
 	}
 
-	if (!env.DEEPINFRA_API_KEY) {
-		return json({ error: 'API key is not configured.' }, { status: 500 });
-	}
+	if (!env.PRIVATE_TOGETHER_API_KEY) {
+    return json({ error: 'API key is not configured.' }, { status: 500 });
+  }
 
 	try {
 		const chunks = splitIntoChunks(text.trim());
 		const results = await Promise.all(
 			chunks.map((chunk) => analyzeChunk(chunk, sourceLang, targetLang))
 		);
-		const words = results.flat();
+		const words = results.flat().filter((w) => w.word.trim());
 
 		return json({ words });
 	} catch (err) {

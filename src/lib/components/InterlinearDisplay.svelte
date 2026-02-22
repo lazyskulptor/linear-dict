@@ -1,5 +1,5 @@
 <script>
-	/** @type {{ words: Array<{ word: string, reading: string, meaning: string, dict: string, pos: string }> }} */
+	/** @type {{ words: Array<{ word: string, meaning: string, dict: string, pos: string }> }} */
 	let { words } = $props();
 
 	// Map POS labels from all target languages to color classes
@@ -30,28 +30,37 @@
 		if (!pos) return 'bg-gray-100 text-gray-600';
 		return posColors[pos] || posColors[pos.toLowerCase()] || 'bg-gray-100 text-gray-600';
 	}
+
+	function isSymbol(word) {
+		return /^[\d\s.,;:!?'"()\[\]{}\-—–…*#@&/\\|<>«»„""''·•※†‡§¶]+$/.test(word);
+	}
 </script>
 
-<div class="flex flex-wrap gap-1 py-4">
+<div class="flex flex-wrap items-end gap-1 py-4">
 	{#each words as item}
-		<div
-			class="group flex flex-col items-center rounded-lg border border-transparent px-3 py-2 transition-all hover:border-primary-200 hover:bg-primary-50 hover:shadow-sm"
-		>
-			<span class="text-lg font-bold text-primary-900">{item.word}</span>
-			{#if item.reading}
-				<span class="mt-0.5 text-xs text-primary-400">{item.reading}</span>
-			{/if}
-			<span class="mt-1 text-sm font-medium text-primary-700">{item.meaning}</span>
-			{#if item.dict}
-				<span class="mt-0.5 max-w-32 text-center text-[11px] leading-tight text-primary-400">{item.dict}</span>
-			{/if}
-			{#if item.pos}
-				<span
-					class="mt-1 rounded-full px-2 py-0.5 text-[10px] font-medium {getPosClass(item.pos)}"
-				>
-					{item.pos}
-				</span>
-			{/if}
-		</div>
+		{#if isSymbol(item.word)}
+			<div class="flex flex-col items-center px-1 py-2">
+				<span class="text-lg text-primary-300">{item.word}</span>
+			</div>
+		{:else}
+			<div
+				class="group flex flex-col items-center rounded-lg border border-transparent px-3 py-2 transition-all hover:border-primary-200 hover:bg-primary-50 hover:shadow-sm"
+			>
+				<span class="text-lg font-bold text-primary-900">{item.word}</span>
+				{#if item.meaning}
+					<span class="mt-1 text-sm font-medium text-primary-700">{item.meaning}</span>
+				{/if}
+				{#if item.dict}
+					<span class="mt-0.5 max-w-32 text-center text-[11px] leading-tight text-primary-400">{item.dict}</span>
+				{/if}
+				{#if item.pos}
+					<span
+						class="mt-1 rounded-full px-2 py-0.5 text-[10px] font-medium {getPosClass(item.pos)}"
+					>
+						{item.pos}
+					</span>
+				{/if}
+			</div>
+		{/if}
 	{/each}
 </div>

@@ -6,8 +6,10 @@
 	let targetLang = $state('한국어');
 	let loading = $state(false);
 	let error = $state('');
-	/** @type {Array<{ word: string, reading: string, meaning: string, dict: string, pos: string }> | null} */
+	/** @type {Array<{ word: string, meaning: string, dict: string, pos: string }> | null} */
 	let words = $state(null);
+	/** @type {AbortController | null} */
+	let abortController = $state(null);
 
 	const languages = [
 		{ value: 'English', label: 'English (English)' },
@@ -20,9 +22,20 @@
 		{ value: 'Русский', label: 'Русский (Russian)' }
 	];
 
+	function cancelAnalysis() {
+		if (abortController) {
+			abortController.abort();
+			abortController = null;
+			loading = false;
+		}
+	}
+
 	async function analyze() {
 		if (!text.trim()) return;
 
+		cancelAnalysis();
+
+		abortController = new AbortController();
 		loading = true;
 		error = '';
 		words = null;
@@ -31,7 +44,8 @@
 			const res = await fetch('/api/analyze', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ text, sourceLang, targetLang })
+				body: JSON.stringify({ text, sourceLang, targetLang }),
+				signal: abortController.signal
 			});
 
 			const data = await res.json();
@@ -43,8 +57,12 @@
 
 			words = data.words;
 		} catch (err) {
+			if (err instanceof DOMException && err.name === 'AbortError') {
+				return;
+			}
 			error = 'A network error occurred.';
 		} finally {
+			abortController = null;
 			loading = false;
 		}
 	}
@@ -52,6 +70,9 @@
 	function handleKeydown(e) {
 		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
 			analyze();
+		}
+		if (e.key === 'Escape' && loading) {
+			cancelAnalysis();
 		}
 	}
 </script>
@@ -98,13 +119,18 @@
 		></textarea>
 
 		<div class="mt-3 flex items-center justify-between">
-			<span class="text-xs text-primary-400">Ctrl+Enter (Cmd+Enter) to analyze</span>
-			<button
-				onclick={analyze}
-				disabled={loading || !text.trim()}
-				class="rounded-lg bg-primary-800 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-			>
+			<span class="text-xs text-primary-400">
 				{#if loading}
+					Press Esc to stop
+				{:else}
+					Ctrl+Enter (Cmd+Enter) to analyze
+				{/if}
+			</span>
+			{#if loading}
+				<button
+					onclick={cancelAnalysis}
+					class="rounded-lg bg-red-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500"
+				>
 					<span class="inline-flex items-center gap-2">
 						<svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
 							<circle
@@ -121,12 +147,18 @@
 								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
 							></path>
 						</svg>
-						Analyzing...
+						Stop
 					</span>
-				{:else}
+				</button>
+			{:else}
+				<button
+					onclick={analyze}
+					disabled={!text.trim()}
+					class="rounded-lg bg-primary-800 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+				>
 					Analyze
-				{/if}
-			</button>
+				</button>
+			{/if}
 		</div>
 	</div>
 
