@@ -1,13 +1,14 @@
 <script>
 	import InterlinearDisplay from '$lib/components/InterlinearDisplay.svelte';
 	import AdUnit from '$lib/components/AdUnit.svelte';
+	import { mapWordsToOriginalText } from '$lib/utils/tokenizer.js';
 
 	let text = $state('');
 	let sourceLang = $state('English');
 	let targetLang = $state('한국어');
 	let loading = $state(false);
 	let error = $state('');
-	/** @type {Array<{ word: string, meaning: string, dict: string, pos: string }> | null} */
+	/** @type {Array<{original: string, meaning?: string, dict?: string, pos?: string, isWhitespace?: boolean, unmatched?: boolean}> | null} */
 	let words = $state(null);
 	/** @type {AbortController | null} */
 	let abortController = $state(null);
@@ -56,7 +57,7 @@
 				return;
 			}
 
-			words = data.words;
+			words = mapWordsToOriginalText(text, data.words);
 		} catch (err) {
 			if (err instanceof DOMException && err.name === 'AbortError') {
 				return;
