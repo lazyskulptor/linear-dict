@@ -17,7 +17,7 @@
 <ins
 	class="adsbygoogle"
 	{style}
-	data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+	data-ad-client="ca-pub-8519776711833256"
 	data-ad-slot={slot}
 	data-ad-format={format}
 	data-full-width-responsive={responsive}
