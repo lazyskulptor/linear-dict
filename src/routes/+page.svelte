@@ -85,7 +85,7 @@
 		"name": "Linear Dict",
 		"alternateName": "Linear Dictionary",
 		"description": "Free online word-by-word interlinear translation and dictionary analysis tool supporting 8 languages.",
-		"url": "https://lineardict.com",
+		"url": "https://linear.sooda.life",
 		"applicationCategory": "UtilitiesApplication",
 		"operatingSystem": "Any",
 		"offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
