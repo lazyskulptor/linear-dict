@@ -4,7 +4,7 @@ import { env } from '$env/dynamic/private';
 const API_URL = 'https://api.together.xyz/v1/chat/completions';
 const MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507-tput';
 
-const MAX_WORDS_PER_CHUNK = 40;
+const LLM_SPLIT_THRESHOLD = 1000;
 
 const POS_EXAMPLES = {
 	'한국어': '명사,동사,형용사,부사,전치사,관사,대명사,접속사,감탄사,조사',
@@ -18,27 +18,67 @@ const POS_EXAMPLES = {
 };
 
 /**
- * Split text into chunks by sentence boundaries, each within word limit.
+ * Ask LLM to split long text into ~1000 char chunks at natural boundaries.
  * @param {string} text
- * @returns {string[]}
+ * @returns {Promise<string[]>}
  */
-function splitIntoChunks(text) {
-	const sentences = text.match(/[^.!?。！？]+[.!?。！？]*\s*/g) || [text];
-	const chunks = [];
-	let current = '';
+async function splitTextWithLLM(text) {
+	const start = performance.now();
+	const response = await fetch(API_URL, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${env.PRIVATE_TOGETHER_API_KEY}`
+		},
+		body: JSON.stringify({
+			model: MODEL,
+			messages: [
+				{
+					role: 'system',
+					content: 'You are a JSON-only text splitter. Output ONLY a raw JSON array of strings. No markdown. No explanation. No code fences.'
+				},
+				{
+					role: 'user',
+					content: `Split the following text into chunks of approximately 400 characters each. Split at natural boundaries (sentence endings, paragraph breaks). Do NOT modify, summarize, or translate the text — keep the original text exactly as is. Each chunk must be a contiguous substring of the original.
 
-	for (const sentence of sentences) {
-		const combined = current + sentence;
-		if (combined.split(/\s+/).filter(Boolean).length > MAX_WORDS_PER_CHUNK && current) {
-			chunks.push(current.trim());
-			current = sentence;
-		} else {
-			current = combined;
-		}
+Output: a JSON array of strings, e.g. ["chunk1...", "chunk2...", "chunk3..."]
+
+Text:
+${text}
+
+/no_think`
+				}
+			],
+			temperature: 0,
+			max_tokens: 16384
+		})
+	});
+
+	if (!response.ok) {
+		throw new Error(`Split API error (${response.status})`);
 	}
-	if (current.trim()) {
-		chunks.push(current.trim());
+
+	const data = await response.json();
+	let content = data.choices?.[0]?.message?.content?.trim();
+
+	if (!content) {
+		throw new Error('Empty split response');
 	}
+
+	content = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/g, '');
+
+	const startIdx = content.indexOf('[');
+	if (startIdx === -1) {
+		throw new Error('Could not parse split response');
+	}
+
+	const chunks = JSON.parse(content.substring(startIdx));
+
+	if (!Array.isArray(chunks) || chunks.length === 0) {
+		throw new Error('Invalid split response');
+	}
+
+	console.log(`[split] ${text.length} chars → ${chunks.length} chunks (${(performance.now() - start).toFixed(0)}ms)`);
 	return chunks;
 }
 
@@ -113,33 +153,26 @@ function repairAndParseJSON(str) {
 	throw new Error('Failed to parse JSON response');
 }
 
-/**
- * Call DeepInfra API for a single chunk of text, with retry.
- * @param {string} text
- * @param {string} sourceLang
- * @param {string} targetLang
- * @param {number} attempt
- * @returns {Promise<Array<{ word: string, reading: string, meaning: string, pos: string }>>}
- */
 async function analyzeChunk(text, sourceLang, targetLang, attempt = 0) {
+	const start = performance.now();
 	const posExamples = POS_EXAMPLES[targetLang] || POS_EXAMPLES['English'];
 
 	const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.PRIVATE_TOGETHER_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: `You are a JSON-only word-by-word translator. Output ONLY a raw JSON array. No markdown. No explanation. No code fences. Start your response with [ and end with ].`
-        },
-        {
-          role: 'user',
-          content: `Translate EVERY single word from ${sourceLang} to ${targetLang}. Do NOT skip any word, including articles (a, an, the), prepositions (in, on, at, of, to, for, with), conjunctions (and, but, or), pronouns (he, she, it, they), and all other words. Every token in the text must appear in your output.
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${env.PRIVATE_TOGETHER_API_KEY}`
+		},
+		body: JSON.stringify({
+			model: MODEL,
+			messages: [
+				{
+					role: 'system',
+					content: `You are a JSON-only word-by-word translator. Output ONLY a raw JSON array. No markdown. No explanation. No code fences. Start your response with [ and end with ].`
+				},
+				{
+					role: 'user',
+					content: `Translate EVERY single word from ${sourceLang} to ${targetLang}. Do NOT skip any word, including articles (a, an, the), prepositions (in, on, at, of, to, for, with), conjunctions (and, but, or), pronouns (he, she, it, they), and all other words. Every token in the text must appear in your output.
 
 CRITICAL: The "meaning" and "dict" fields MUST be written ENTIRELY in ${targetLang}. Do NOT use any other language or script. For example, if target is 한국어, write ONLY in Korean (한글), never use Chinese characters (漢字) or other scripts.
 
@@ -159,16 +192,16 @@ Now analyze this text. Include ALL tokens:
 ${text}
 
 /no_think`
-        }
-      ],
-      temperature: 0.05,
-      max_tokens: 8192
-    })
-  });
+				}
+			],
+			temperature: 0.05,
+			max_tokens: 8192
+		})
+	});
 
 	if (!response.ok) {
 		const errorBody = await response.text();
-		console.error('DeepInfra API error:', response.status, errorBody);
+		console.error('Together API error:', response.status, errorBody);
 		throw new Error(`API error (${response.status})`);
 	}
 
@@ -192,7 +225,9 @@ ${text}
 	const jsonStr = content.substring(startIdx);
 
 	try {
-		return repairAndParseJSON(jsonStr);
+		const result = repairAndParseJSON(jsonStr);
+		console.log(`[analyze] ${text.length} chars → ${result.length} words (${(performance.now() - start).toFixed(0)}ms)`);
+		return result;
 	} catch (parseErr) {
 		// Retry once on parse failure
 		if (attempt < 1) {
@@ -220,17 +255,56 @@ export async function POST({ request }) {
     return json({ error: 'API key is not configured.' }, { status: 500 });
   }
 
-	try {
-		const chunks = splitIntoChunks(text.trim());
-		const results = await Promise.all(
-			chunks.map((chunk) => analyzeChunk(chunk, sourceLang, targetLang))
-		);
-		const words = results.flat().filter((w) => w.word.trim());
+	const trimmedText = text.trim();
+	const encoder = new TextEncoder();
+	const { readable, writable } = new TransformStream();
 
-		return json({ words });
-	} catch (err) {
-		console.error('Analyze error:', err);
-		const message = err instanceof Error ? err.message : 'An error occurred during analysis.';
-		return json({ error: message }, { status: 500 });
-	}
+	(async () => {
+		const writer = writable.getWriter();
+		let closed = false;
+
+		async function write(data) {
+			if (closed) return;
+			try {
+				await writer.write(encoder.encode(data));
+			} catch {
+				closed = true;
+			}
+		}
+
+		try {
+			const chunks = trimmedText.length > LLM_SPLIT_THRESHOLD
+				? await splitTextWithLLM(trimmedText)
+				: [trimmedText];
+
+			for (const chunk of chunks) {
+				if (closed) break;
+				try {
+					const words = await analyzeChunk(chunk, sourceLang, targetLang);
+					const filtered = words.filter((w) => w.word.trim());
+					await write(JSON.stringify({ words: filtered }) + '\n');
+				} catch (err) {
+					console.error('Analyze chunk error:', err);
+					const message =
+						err instanceof Error ? err.message : 'An error occurred during analysis.';
+					await write(JSON.stringify({ error: message }) + '\n');
+				}
+			}
+		} catch (err) {
+			console.error('Stream error:', err);
+			const message = err instanceof Error ? err.message : 'An error occurred during analysis.';
+			await write(JSON.stringify({ error: message }) + '\n');
+		}
+
+		if (!closed) {
+			try { await writer.close(); } catch { /* already closed */ }
+		}
+	})();
+
+	return new Response(readable, {
+		headers: {
+			'Content-Type': 'text/plain; charset=utf-8',
+			'X-Content-Type-Options': 'nosniff'
+		}
+	});
 }

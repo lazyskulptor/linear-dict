@@ -52,14 +52,49 @@
 				signal: abortController.signal
 			});
 
-			const data = await res.json();
-
+			// Non-streaming error responses (400, 500 before stream starts)
 			if (!res.ok) {
+				const data = await res.json();
 				error = data.error || 'An error occurred during analysis.';
 				return;
 			}
 
-			words = mapWordsToOriginalText(text, data.words);
+			// Read NDJSON stream
+			const reader = res.body.getReader();
+			const decoder = new TextDecoder();
+			let buffer = '';
+			let allWords = [];
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				buffer = lines.pop();
+
+				for (const line of lines) {
+					if (!line.trim()) continue;
+					const data = JSON.parse(line);
+					if (data.error) {
+						error = data.error;
+						continue;
+					}
+					allWords = [...allWords, ...data.words];
+					words = mapWordsToOriginalText(text, allWords);
+				}
+			}
+
+			// Process any remaining data in buffer
+			if (buffer.trim()) {
+				const data = JSON.parse(buffer);
+				if (data.error) {
+					error = data.error;
+				} else {
+					allWords = [...allWords, ...data.words];
+					words = mapWordsToOriginalText(text, allWords);
+				}
+			}
 		} catch (err) {
 			if (err instanceof DOMException && err.name === 'AbortError') {
 				return;
