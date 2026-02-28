@@ -4,7 +4,7 @@ import { env } from '$env/dynamic/private';
 const API_URL = 'https://api.together.xyz/v1/chat/completions';
 const MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507-tput';
 
-const LLM_SPLIT_THRESHOLD = 1000;
+const CHUNK_CHAR_LIMIT = 500;
 
 const POS_EXAMPLES = {
 	'한국어': '명사,동사,형용사,부사,전치사,관사,대명사,접속사,감탄사,조사',
@@ -18,67 +18,28 @@ const POS_EXAMPLES = {
 };
 
 /**
- * Ask LLM to split long text into ~1000 char chunks at natural boundaries.
+ * Split text into ~1000 char chunks at sentence/paragraph boundaries.
  * @param {string} text
- * @returns {Promise<string[]>}
+ * @returns {string[]}
  */
-async function splitTextWithLLM(text) {
-	const start = performance.now();
-	const response = await fetch(API_URL, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${env.PRIVATE_TOGETHER_API_KEY}`
-		},
-		body: JSON.stringify({
-			model: MODEL,
-			messages: [
-				{
-					role: 'system',
-					content: 'You are a JSON-only text splitter. Output ONLY a raw JSON array of strings. No markdown. No explanation. No code fences.'
-				},
-				{
-					role: 'user',
-					content: `Split the following text into chunks of approximately 400 characters each. Split at natural boundaries (sentence endings, paragraph breaks). Do NOT modify, summarize, or translate the text — keep the original text exactly as is. Each chunk must be a contiguous substring of the original.
+function splitIntoChunks(text) {
+	if (text.length <= CHUNK_CHAR_LIMIT) return [text];
 
-Output: a JSON array of strings, e.g. ["chunk1...", "chunk2...", "chunk3..."]
+	const sentences = text.match(/[^.!?。！？\n]+[.!?。！？]*[\s]*/g) || [text];
+	const chunks = [];
+	let current = '';
 
-Text:
-${text}
-
-/no_think`
-				}
-			],
-			temperature: 0,
-			max_tokens: 16384
-		})
-	});
-
-	if (!response.ok) {
-		throw new Error(`Split API error (${response.status})`);
+	for (const sentence of sentences) {
+		if (current.length + sentence.length > CHUNK_CHAR_LIMIT && current) {
+			chunks.push(current.trim());
+			current = sentence;
+		} else {
+			current += sentence;
+		}
 	}
-
-	const data = await response.json();
-	let content = data.choices?.[0]?.message?.content?.trim();
-
-	if (!content) {
-		throw new Error('Empty split response');
+	if (current.trim()) {
+		chunks.push(current.trim());
 	}
-
-	content = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/g, '');
-
-	const startIdx = content.indexOf('[');
-	if (startIdx === -1) {
-		throw new Error('Could not parse split response');
-	}
-
-	const chunks = JSON.parse(content.substring(startIdx));
-
-	if (!Array.isArray(chunks) || chunks.length === 0) {
-		throw new Error('Invalid split response');
-	}
-
-	console.log(`[split] ${text.length} chars → ${chunks.length} chunks (${(performance.now() - start).toFixed(0)}ms)`);
 	return chunks;
 }
 
@@ -273,9 +234,7 @@ export async function POST({ request }) {
 		}
 
 		try {
-			const chunks = trimmedText.length > LLM_SPLIT_THRESHOLD
-				? await splitTextWithLLM(trimmedText)
-				: [trimmedText];
+			const chunks = splitIntoChunks(trimmedText);
 
 			for (const chunk of chunks) {
 				if (closed) break;
