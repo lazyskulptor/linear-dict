@@ -13,6 +13,8 @@
 	/** @type {AbortController | null} */
 	let abortController = $state(null);
 
+	const MAX_LENGTH = 20000;
+
 	const languages = [
 		{ value: 'English', label: 'English (English)' },
 		{ value: '中文', label: '中文 (Chinese)' },
@@ -130,22 +132,39 @@
 					</label>
 				</div>
 
-				<textarea
-					bind:value={text}
-					onkeydown={handleKeydown}
-					placeholder="Enter text to analyze..."
-					rows="4"
-					class="w-full resize-none rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-primary-900 placeholder:text-primary-300 outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-400"
-				></textarea>
+				<div class="relative">
+					<textarea
+						bind:value={text}
+						onkeydown={handleKeydown}
+						maxlength={MAX_LENGTH}
+						placeholder="Enter text to analyze..."
+						rows="4"
+						class="w-full resize-none rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 pr-9 text-primary-900 placeholder:text-primary-300 outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-400"
+					></textarea>
+					{#if text}
+						<button
+							onclick={() => { text = ''; words = null; error = ''; }}
+							class="absolute top-2.5 right-2.5 flex h-5 w-5 items-center justify-center rounded-full text-primary-300 transition-colors hover:bg-primary-100 hover:text-primary-500"
+							title="Clear text"
+						>
+							<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+								<path d="M18 6L6 18M6 6l12 12" />
+							</svg>
+						</button>
+					{/if}
+				</div>
 
 				<div class="mt-3 flex items-center justify-between">
-					<span class="text-xs text-primary-400">
-						{#if loading}
-							Press Esc to stop
-						{:else}
-							Ctrl+Enter (Cmd+Enter) to analyze
-						{/if}
-					</span>
+					<div class="flex items-center gap-3">
+						<span class="text-xs text-primary-400">
+							{#if loading}
+								Press Esc to stop
+							{:else}
+								Ctrl+Enter (Cmd+Enter) to analyze
+							{/if}
+						</span>
+						<span class="text-xs {text.length >= MAX_LENGTH ? 'text-red-400' : 'text-primary-300'}">{text.length.toLocaleString()} / {MAX_LENGTH.toLocaleString()}</span>
+					</div>
 					{#if loading}
 						<button
 							onclick={cancelAnalysis}

@@ -212,6 +212,10 @@ export async function POST({ request }) {
 		return json({ error: 'Please enter text to analyze.' }, { status: 400 });
 	}
 
+	if (text.length > 20000) {
+		return json({ error: 'Text exceeds the 20,000 character limit.' }, { status: 400 });
+	}
+
 	if (!env.PRIVATE_TOGETHER_API_KEY) {
     return json({ error: 'API key is not configured.' }, { status: 500 });
   }
