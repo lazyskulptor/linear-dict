@@ -156,7 +156,9 @@ Input: "The 3 cats."
 Output: [{"word":"The","meaning":"그","dict":"정관사, 특정한 것을 가리킴","pos":"관사"},{"word":"3","meaning":"","dict":"","pos":""},{"word":"cats","meaning":"고양이들","dict":"고양이, 작은 포유류","pos":"명사"},{"word":".","meaning":"","dict":"","pos":""}]
 
 Now analyze this text. Include ALL tokens:
-${text}`
+${text}
+
+/no_think`
         }
       ],
       temperature: 0.05,
