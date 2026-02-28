@@ -4,7 +4,7 @@ import { env } from '$env/dynamic/private';
 const API_URL = 'https://api.together.xyz/v1/chat/completions';
 const MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507-tput';
 
-const CHUNK_CHAR_LIMIT = 500;
+const CHUNK_CHAR_LIMIT = 300;
 
 const POS_EXAMPLES = {
 	'한국어': '명사,동사,형용사,부사,전치사,관사,대명사,접속사,감탄사,조사',
