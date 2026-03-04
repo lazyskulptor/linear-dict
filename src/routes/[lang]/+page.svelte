@@ -48,6 +48,12 @@
 		error = '';
 		words = null;
 
+		globalThis.gtag?.('event', 'analyze', {
+			source_lang: sourceLang,
+			target_lang: targetLang,
+			text_length: text.length
+		});
+
 		try {
 			const res = await fetch('/api/analyze', {
 				method: 'POST',
