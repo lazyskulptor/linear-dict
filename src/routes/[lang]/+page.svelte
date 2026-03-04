@@ -1,11 +1,26 @@
 <script>
+	import { goto } from '$app/navigation';
 	import InterlinearDisplay from '$lib/components/InterlinearDisplay.svelte';
 	import AdUnit from '$lib/components/AdUnit.svelte';
 	import { mapWordsToOriginalText } from '$lib/utils/tokenizer.js';
 
+	/** @type {{ data: import('./$types').PageData }} */
+	let { data } = $props();
+
+	let sourceLang = $derived(data.langConfig.value);
+	let allLanguages = $derived(data.allLanguages);
+
 	let text = $state('');
-	let sourceLang = $state('English');
 	let targetLang = $state('한국어');
+	let targetLanguages = $derived(allLanguages.filter((l) => l.value !== sourceLang));
+
+	// source 언어 변경 시 target이 동일하면 자동 전환
+	$effect(() => {
+		if (targetLang === sourceLang) {
+			const fallback = targetLanguages[0];
+			if (fallback) targetLang = fallback.value;
+		}
+	});
 	let loading = $state(false);
 	let error = $state('');
 	/** @type {Array<{original: string, meaning?: string, dict?: string, pos?: string, isWhitespace?: boolean, unmatched?: boolean}> | null} */
@@ -14,19 +29,6 @@
 	let abortController = $state(null);
 
 	const MAX_LENGTH = 20000;
-
-	const languages = [
-		{ value: 'English', label: 'English (English)' },
-		{ value: '中文', label: '中文 (Chinese)' },
-		{ value: '日本語', label: '日本語 (Japanese)' },
-		{ value: '한국어', label: '한국어 (Korean)' },
-		{ value: 'Español', label: 'Español (Spanish)' },
-		{ value: 'Français', label: 'Français (French)' },
-		{ value: 'Deutsch', label: 'Deutsch (German)' },
-		{ value: 'Русский', label: 'Русский (Russian)' },
-		{ value: 'עברית מקראית', label: 'עברית מקראית (Biblical Hebrew)' },
-		{ value: 'Ἑλληνικὴ Κοινή', label: 'Ἑλληνικὴ Κοινή (Biblical Greek)' }
-	];
 
 	function cancelAnalysis() {
 		if (abortController) {
@@ -118,21 +120,6 @@
 	}
 </script>
 
-<svelte:head>
-	{@html `<script type="application/ld+json">${JSON.stringify({
-		"@context": "https://schema.org",
-		"@type": "WebApplication",
-		"name": "Linear Dict",
-		"alternateName": "Linear Dictionary",
-		"description": "Free online word-by-word interlinear translation and dictionary analysis tool supporting 10 languages including Biblical Hebrew and Koine Greek.",
-		"url": "https://linear.sooda.life",
-		"applicationCategory": "UtilitiesApplication",
-		"operatingSystem": "Any",
-		"offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-		"inLanguage": ["en", "zh", "ja", "ko", "es", "fr", "de", "ru", "hbo", "grc"]
-	})}</script>`}
-</svelte:head>
-
 <main class="mx-auto max-w-7xl px-4 py-8">
 	<header class="mb-8 text-center">
 		<h1 class="text-3xl font-bold text-primary-900">Linear Dict</h1>
@@ -147,11 +134,12 @@
 					<label class="flex flex-1 flex-col gap-1">
 						<span class="text-xs font-medium text-primary-600">Source Language</span>
 						<select
-							bind:value={sourceLang}
+							value={data.langConfig.slug}
+							onchange={(e) => goto(`/${e.target.value}`)}
 							class="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-800 outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-400"
 						>
-							{#each languages as lang}
-								<option value={lang.value}>{lang.label}</option>
+							{#each allLanguages as lang}
+								<option value={lang.slug}>{lang.label}</option>
 							{/each}
 						</select>
 					</label>
@@ -162,7 +150,7 @@
 							bind:value={targetLang}
 							class="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm text-primary-800 outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-400"
 						>
-							{#each languages as lang}
+							{#each targetLanguages as lang}
 								<option value={lang.value}>{lang.label}</option>
 							{/each}
 						</select>
@@ -174,7 +162,8 @@
 						bind:value={text}
 						onkeydown={handleKeydown}
 						maxlength={MAX_LENGTH}
-						placeholder="Enter text to analyze..."
+						dir={data.langConfig.dir}
+						placeholder={data.langConfig.placeholder}
 						rows="4"
 						class="w-full resize-none rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 pr-9 text-primary-900 placeholder:text-primary-300 outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-400"
 					></textarea>

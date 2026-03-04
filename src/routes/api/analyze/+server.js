@@ -1,23 +1,11 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { languagesByValue } from '$lib/config/languages.js';
 
 const API_URL = 'https://api.together.xyz/v1/chat/completions';
 const MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507-tput';
 
 const CHUNK_CHAR_LIMIT = 300;
-
-const POS_EXAMPLES = {
-	'한국어': '명사,동사,형용사,부사,전치사,관사,대명사,접속사,감탄사,조사',
-	'English': 'noun,verb,adj,adv,prep,det,pron,conj,intj,part',
-	'中文': '名词,动词,形容词,副词,介词,冠词,代词,连词,叹词,助词',
-	'日本語': '名詞,動詞,形容詞,副詞,前置詞,冠詞,代名詞,接続詞,感嘆詞,助詞',
-	'Русский': 'сущ,гл,прил,нар,предл,арт,мест,союз,межд,част',
-	'Español': 'sust,verbo,adj,adv,prep,art,pron,conj,interj,part',
-	'Français': 'nom,verbe,adj,adv,prép,art,pron,conj,interj,part',
-	'Deutsch': 'Subst,Verb,Adj,Adv,Präp,Art,Pron,Konj,Interj,Part',
-	'עברית מקראית': 'שֵׁם,פֹּעַל,שֵׁם תֹּאַר,תֹּאַר הַפֹּעַל,מִלַּת יַחַס,כִּנּוּי,מִלַּת חִבּוּר,מִלַּת קְרִיאָה,מִלַּת רִבּוּי,חָרוּז',
-	'Ἑλληνικὴ Κοινή': 'ὄνομα,ῥῆμα,ἐπίθετον,ἐπίρρημα,πρόθεσις,ἄρθρον,ἀντωνυμία,σύνδεσμος,ἐπιφώνημα,μόριον'
-};
 
 /**
  * Split text into ~1000 char chunks at sentence/paragraph boundaries.
@@ -118,7 +106,10 @@ function repairAndParseJSON(str) {
 
 async function analyzeChunk(text, sourceLang, targetLang, attempt = 0) {
 	const start = performance.now();
-	const posExamples = POS_EXAMPLES[targetLang] || POS_EXAMPLES['English'];
+	const sourceLangConfig = languagesByValue[sourceLang];
+	const targetLangConfig = languagesByValue[targetLang];
+	const posExamples = targetLangConfig?.posLabels || 'noun,verb,adj,adv,prep,det,pron,conj,intj,part';
+	const promptGuidance = sourceLangConfig?.promptGuidance || '';
 
 	const response = await fetch(API_URL, {
 		method: 'POST',
@@ -131,11 +122,13 @@ async function analyzeChunk(text, sourceLang, targetLang, attempt = 0) {
 			messages: [
 				{
 					role: 'system',
-					content: `You are a JSON-only word-by-word translator. Output ONLY a raw JSON array. No markdown. No explanation. No code fences. Start your response with [ and end with ].`
+					content: `You are a JSON-only word-by-word translator specializing in ${sourceLang}. Output ONLY a raw JSON array. No markdown. No explanation. No code fences. Start your response with [ and end with ].`
 				},
 				{
 					role: 'user',
-					content: `Translate EVERY single word from ${sourceLang} to ${targetLang}. Do NOT skip any word, including articles (a, an, the), prepositions (in, on, at, of, to, for, with), conjunctions (and, but, or), pronouns (he, she, it, they), and all other words. Every token in the text must appear in your output.
+					content: `Translate EVERY single word/token from ${sourceLang} to ${targetLang}. Do NOT skip any token.
+
+${promptGuidance}
 
 CRITICAL: The "meaning" and "dict" fields MUST be written ENTIRELY in ${targetLang}. Do NOT use any other language or script. For example, if target is 한국어, write ONLY in Korean (한글), never use Chinese characters (漢字) or other scripts.
 
@@ -146,10 +139,6 @@ Output: JSON array. Each element: {"word":"...","meaning":"...","dict":"...","po
 - meaning: contextual ${targetLang} translation (MUST be in ${targetLang} only). "" for numbers/punctuation.
 - dict: brief dictionary definition (MUST be in ${targetLang} only). "" for numbers/punctuation.
 - pos: one of [${posExamples}]
-
-Example for English→한국어:
-Input: "The 3 cats."
-Output: [{"word":"The","meaning":"그","dict":"정관사, 특정한 것을 가리킴","pos":"관사"},{"word":"3","meaning":"","dict":"","pos":""},{"word":"cats","meaning":"고양이들","dict":"고양이, 작은 포유류","pos":"명사"},{"word":".","meaning":"","dict":"","pos":""}]
 
 Now analyze this text. Include ALL tokens:
 ${text}
