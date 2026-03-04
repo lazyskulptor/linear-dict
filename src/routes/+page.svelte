@@ -23,7 +23,9 @@
 		{ value: 'Español', label: 'Español (Spanish)' },
 		{ value: 'Français', label: 'Français (French)' },
 		{ value: 'Deutsch', label: 'Deutsch (German)' },
-		{ value: 'Русский', label: 'Русский (Russian)' }
+		{ value: 'Русский', label: 'Русский (Russian)' },
+		{ value: 'עברית מקראית', label: 'עברית מקראית (Biblical Hebrew)' },
+		{ value: 'Ἑλληνικὴ Κοινή', label: 'Ἑλληνικὴ Κοινή (Biblical Greek)' }
 	];
 
 	function cancelAnalysis() {
@@ -122,12 +124,12 @@
 		"@type": "WebApplication",
 		"name": "Linear Dict",
 		"alternateName": "Linear Dictionary",
-		"description": "Free online word-by-word interlinear translation and dictionary analysis tool supporting 8 languages.",
+		"description": "Free online word-by-word interlinear translation and dictionary analysis tool supporting 10 languages including Biblical Hebrew and Koine Greek.",
 		"url": "https://linear.sooda.life",
 		"applicationCategory": "UtilitiesApplication",
 		"operatingSystem": "Any",
 		"offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-		"inLanguage": ["en", "zh", "ja", "ko", "es", "fr", "de", "ru"]
+		"inLanguage": ["en", "zh", "ja", "ko", "es", "fr", "de", "ru", "hbo", "grc"]
 	})}</script>`}
 </svelte:head>
 
@@ -269,7 +271,7 @@
 			<p>
 				Linear Dict is a free interlinear translation tool that breaks down any text word by word.
 				Each word is displayed with its contextual translation, dictionary definition, and part of speech.
-				Supports English, Chinese, Japanese, Korean, Russian, Spanish, French, and German.
+				Supports English, Chinese, Japanese, Korean, Russian, Spanish, French, German, Biblical Hebrew, and Biblical Greek (Koine).
 			</p>
 		</section>
 		<p class="mt-4">&copy; {new Date().getFullYear()} Linear Dict</p>

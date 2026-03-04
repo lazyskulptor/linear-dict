@@ -14,7 +14,9 @@ const POS_EXAMPLES = {
 	'Русский': 'сущ,гл,прил,нар,предл,арт,мест,союз,межд,част',
 	'Español': 'sust,verbo,adj,adv,prep,art,pron,conj,interj,part',
 	'Français': 'nom,verbe,adj,adv,prép,art,pron,conj,interj,part',
-	'Deutsch': 'Subst,Verb,Adj,Adv,Präp,Art,Pron,Konj,Interj,Part'
+	'Deutsch': 'Subst,Verb,Adj,Adv,Präp,Art,Pron,Konj,Interj,Part',
+	'עברית מקראית': 'שֵׁם,פֹּעַל,שֵׁם תֹּאַר,תֹּאַר הַפֹּעַל,מִלַּת יַחַס,כִּנּוּי,מִלַּת חִבּוּר,מִלַּת קְרִיאָה,מִלַּת רִבּוּי,חָרוּז',
+	'Ἑλληνικὴ Κοινή': 'ὄνομα,ῥῆμα,ἐπίθετον,ἐπίρρημα,πρόθεσις,ἄρθρον,ἀντωνυμία,σύνδεσμος,ἐπιφώνημα,μόριον'
 };
 
 /**
