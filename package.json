@@ -61,6 +61,7 @@
     "sst": "^3.19.0",
     "svelte-dnd-action": "^0.9.61",
     "svelte-kit-sst": "^2.49.6",
+    "svelte-kit-sst-streaming": "^0.0.6",
     "sveltekit-i18n": "^2.4.2",
     "uuid": "^11.1.0",
     "xlsx": "^0.18.5"

@@ -12,7 +12,7 @@ async function loadAdapter() {
 		case 'node':
 			return (await import('@sveltejs/adapter-node')).default();
 		default:
-			return (await import('svelte-kit-sst')).default(); // or your SST adapter
+			return (await import('svelte-kit-sst-streaming')).default();
 	}
 }
 

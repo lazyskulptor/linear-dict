@@ -1,5 +1,5 @@
 # ─── Stage 1: Install & Build ─────────────────────────────────
-FROM node:22.4-alpine AS builder
+FROM node:22-alpine AS builder
 
 ENV ADAPTER="node"
 
@@ -14,7 +14,7 @@ COPY . .
 RUN npm run build
 
 # ─── Stage 2: Production Server ───────────────────────────────
-FROM node:22.4-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 

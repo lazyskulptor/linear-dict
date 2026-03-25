@@ -208,6 +208,7 @@ export async function POST({ request }) {
 
 		try {
 			const chunks = splitIntoChunks(trimmedText);
+			console.log(`[stream] ${chunks.length} chunks:`, chunks.map((c) => c.substring(0, 40)));
 
 			for (const chunk of chunks) {
 				if (closed) break;
@@ -235,7 +236,8 @@ export async function POST({ request }) {
 
 	return new Response(readable, {
 		headers: {
-			'Content-Type': 'text/plain; charset=utf-8',
+			'Content-Type': 'text/event-stream',
+			'Cache-Control': 'no-cache, no-store, must-revalidate',
 			'X-Content-Type-Options': 'nosniff'
 		}
 	});
