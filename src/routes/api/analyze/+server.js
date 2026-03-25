@@ -5,32 +5,14 @@ import { languagesByValue } from '$lib/config/languages.js';
 const API_URL = 'https://api.together.xyz/v1/chat/completions';
 const MODEL = 'Qwen/Qwen3-235B-A22B-Instruct-2507-tput';
 
-const CHUNK_CHAR_LIMIT = 300;
-
 /**
- * Split text into ~1000 char chunks at sentence/paragraph boundaries.
+ * Split text into individual sentences.
  * @param {string} text
  * @returns {string[]}
  */
 function splitIntoChunks(text) {
-	if (text.length <= CHUNK_CHAR_LIMIT) return [text];
-
 	const sentences = text.match(/[^.!?。！？\n]+[.!?。！？]*[\s]*/g) || [text];
-	const chunks = [];
-	let current = '';
-
-	for (const sentence of sentences) {
-		if (current.length + sentence.length > CHUNK_CHAR_LIMIT && current) {
-			chunks.push(current.trim());
-			current = sentence;
-		} else {
-			current += sentence;
-		}
-	}
-	if (current.trim()) {
-		chunks.push(current.trim());
-	}
-	return chunks;
+	return sentences.map((s) => s.trim()).filter(Boolean);
 }
 
 /**
