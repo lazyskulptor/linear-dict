@@ -11,7 +11,7 @@ export default $config({
   async run() {
     new sst.aws.SvelteKit('LinearDict', {
       server: {
-        timeout: '120 seconds',
+        timeout: '600 seconds',
         runtime: 'nodejs22.x'
       },
       environment: {
