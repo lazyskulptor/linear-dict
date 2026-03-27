@@ -20,6 +20,7 @@ export default $config({
       transform: {
         server: (args) => {
           args.streaming = true;
+          args.timeout = 600; // CloudFront 검증 우회, Lambda만 10분으로 설정
         }
       }
     });
