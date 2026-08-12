@@ -3,7 +3,7 @@ import { env } from '$env/dynamic/private';
 import { languagesByValue } from '$lib/config/languages.js';
 
 const API_URL = 'https://api.together.xyz/v1/chat/completions';
-const MODEL = 'deepseek-ai/DeepSeek-R1-0528';
+const MODEL = 'deepseek-ai/DeepSeek-V4-Flash-0731';
 
 const CHUNK_CHAR_LIMIT = 300;
 
