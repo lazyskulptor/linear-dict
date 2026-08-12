@@ -142,12 +142,13 @@ Output: JSON array. Each element: {"word":"...","meaning":"...","dict":"...","po
 
 Now analyze this text. Include ALL tokens:
 ${text}
-
-/no_think`
+`
 				}
 			],
 			temperature: 0.05,
-			max_tokens: 8192
+			max_tokens: 8192,
+			stream: true,
+			reasoning: { enabled: false }
 		})
 	});
 
@@ -157,8 +158,51 @@ ${text}
 		throw new Error(`API error (${response.status})`);
 	}
 
-	const data = await response.json();
-	let content = data.choices?.[0]?.message?.content?.trim();
+	// Read the SSE stream from Together and accumulate the answer tokens.
+	// reasoning is disabled, so content arrives directly in delta.content.
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let lineBuffer = '';
+	let content = '';
+	let streamDone = false;
+
+	while (!streamDone) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		lineBuffer += decoder.decode(value, { stream: true });
+
+		let newlineIdx;
+		while (!streamDone && (newlineIdx = lineBuffer.indexOf('\n')) !== -1) {
+			const line = lineBuffer.slice(0, newlineIdx).trim();
+			lineBuffer = lineBuffer.slice(newlineIdx + 1);
+			if (!line.startsWith('data:')) continue;
+
+			const payload = line.slice(5).trim();
+			if (payload === '[DONE]') {
+				streamDone = true;
+				break;
+			}
+
+			let parsed;
+			try {
+				parsed = JSON.parse(payload);
+			} catch {
+				continue; // partial/fragmented event, ignore
+			}
+
+			const delta = parsed.choices?.[0]?.delta;
+			if (delta?.content) content += delta.content;
+		}
+	}
+
+	return finishAnalysis(content, text, sourceLang, targetLang, attempt, start);
+}
+
+/**
+ * Parse the accumulated content, retry once on JSON parse failure.
+ */
+function finishAnalysis(content, text, sourceLang, targetLang, attempt, start) {
+	content = content?.trim();
 
 	if (!content) {
 		throw new Error('Empty response from API.');
