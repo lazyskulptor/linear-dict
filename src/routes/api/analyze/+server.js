@@ -5,7 +5,7 @@ import { languagesByValue } from '$lib/config/languages.js';
 const API_URL = 'https://api.together.xyz/v1/chat/completions';
 const MODEL = 'deepseek-ai/DeepSeek-V4-Flash-0731';
 
-const CHUNK_CHAR_LIMIT = 300;
+const CHUNK_CHAR_LIMIT = 1000;
 
 /**
  * Split text into ~1000 char chunks at sentence/paragraph boundaries.
@@ -132,6 +132,8 @@ ${promptGuidance}
 
 CRITICAL: The "meaning" and "dict" fields MUST be written ENTIRELY in ${targetLang}. Do NOT use any other language or script. For example, if target is 한국어, write ONLY in Korean (한글), never use Chinese characters (漢字) or other scripts.
 
+BE SHORT: meaning must be 1-3 words (no full sentences, no explanation). dict must be 1-4 words (short gloss, no examples, no parentheses).
+
 For punctuation marks and standalone numbers: include them but set meaning and dict to empty strings "".
 
 Output: JSON array. Each element: {"word":"...","meaning":"...","dict":"...","pos":"..."}
@@ -148,6 +150,7 @@ ${text}
 			temperature: 0.05,
 			max_tokens: 8192,
 			stream: true,
+			stream_options: { include_usage: true },
 			reasoning: { enabled: false }
 		})
 	});
@@ -165,6 +168,7 @@ ${text}
 	let lineBuffer = '';
 	let content = '';
 	let streamDone = false;
+	let usage = null;
 
 	while (!streamDone) {
 		const { done, value } = await reader.read();
@@ -190,18 +194,20 @@ ${text}
 				continue; // partial/fragmented event, ignore
 			}
 
+			if (parsed.usage) usage = parsed.usage;
+
 			const delta = parsed.choices?.[0]?.delta;
 			if (delta?.content) content += delta.content;
 		}
 	}
 
-	return finishAnalysis(content, text, sourceLang, targetLang, attempt, start);
+	return finishAnalysis(content, text, sourceLang, targetLang, attempt, start, usage);
 }
 
 /**
  * Parse the accumulated content, retry once on JSON parse failure.
  */
-function finishAnalysis(content, text, sourceLang, targetLang, attempt, start) {
+function finishAnalysis(content, text, sourceLang, targetLang, attempt, start, usage) {
 	content = content?.trim();
 
 	if (!content) {
@@ -222,7 +228,8 @@ function finishAnalysis(content, text, sourceLang, targetLang, attempt, start) {
 
 	try {
 		const result = repairAndParseJSON(jsonStr);
-		console.log(`[analyze] ${text.length} chars → ${result.length} words (${(performance.now() - start).toFixed(0)}ms)`);
+		const outTokens = usage?.completion_tokens ?? '?';
+		console.log(`[analyze] ${text.length} chars → ${result.length} words (${(performance.now() - start).toFixed(0)}ms, ${outTokens} out tokens)`);
 		return result;
 	} catch (parseErr) {
 		// Retry once on parse failure
