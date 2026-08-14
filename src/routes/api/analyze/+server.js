@@ -5,7 +5,7 @@ import { languagesByValue } from '$lib/config/languages.js';
 const API_URL = 'https://api.together.xyz/v1/chat/completions';
 const MODEL = 'deepseek-ai/DeepSeek-V4-Flash-0731';
 
-const CHUNK_CHAR_LIMIT = 1000;
+const CHUNK_CHAR_LIMIT = 300;
 
 /**
  * Split text into ~1000 char chunks at sentence/paragraph boundaries.
